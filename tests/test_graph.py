@@ -68,11 +68,11 @@ def test_researcher_agent_returns_correct_state_keys():
     mock_llm_response.tool_calls = []
     mock_llm_response.content = "RAG is a technique that combines retrieval with generation."
 
-    with patch("src.agents.researcher.ChatGoogleGenerativeAI") as mock_llm_cls, \
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
+
+    with patch("src.agents.researcher._get_llm", return_value=mock_llm), \
          patch("src.agents.researcher.get_web_search_tool") as mock_tool_fn:
-        mock_llm = MagicMock()
-        mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
-        mock_llm_cls.return_value = mock_llm
         mock_tool_fn.return_value = MagicMock()
 
         from src.agents.researcher import researcher_agent
@@ -114,36 +114,22 @@ def test_retriever_agent_returns_local_results():
 # ── Writer agent tests ────────────────────────────────────────────────────────
 
 def test_writer_agent_produces_final_report():
-    with patch("src.agents.writer.ChatGoogleGenerativeAI") as mock_llm_cls:
-        mock_chain_result = "## Research Report\n\nRAG stands for Retrieval-Augmented Generation..."
-        mock_llm = MagicMock()
-        mock_llm_cls.return_value = mock_llm
+    mock_chain = MagicMock()
+    mock_chain.invoke.return_value = "## Research Report\n\nRAG stands for Retrieval-Augmented Generation..."
 
-        # Patch the chain invoke
-        with patch("src.agents.writer.StrOutputParser") as mock_parser_cls:
-            mock_chain = MagicMock()
-            mock_chain.invoke.return_value = mock_chain_result
+    with patch("src.agents.writer._get_llm", return_value=MagicMock()), \
+         patch("src.agents.writer.WRITER_PROMPT") as mock_prompt:
+        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
+        mock_chain.__or__ = MagicMock(return_value=mock_chain)
 
-            with patch("src.agents.writer.WRITER_PROMPT.__or__", return_value=mock_chain):
-                from src.agents.writer import writer_agent
-                state = make_state(
-                    question="What is RAG?",
-                    web_search_results="Web: RAG is a technique...",
-                    doc_search_results="Local: RAG combines retrieval...",
-                )
-                # Directly mock the chain
-                with patch("src.agents.writer.ChatGoogleGenerativeAI") as m:
-                    with patch("langchain_core.output_parsers.StrOutputParser.__or__"):
-                        pass
+        from src.agents.writer import writer_agent
+        state = make_state(
+            question="What is RAG?",
+            web_search_results="Web: RAG is a technique...",
+            doc_search_results="Local: RAG combines retrieval...",
+        )
+        result = writer_agent(state)
 
-    # Simplified test: just verify the function signature and state keys
-    with patch("src.agents.writer.ChatGoogleGenerativeAI") as mock_cls, \
-         patch("langchain_core.prompts.ChatPromptTemplate.__or__", return_value=MagicMock(
-             __or__=MagicMock(return_value=MagicMock(
-                 invoke=MagicMock(return_value="## Report\nRAG content here."))))):
-        pass  # Chain mocking is complex; integration test is more appropriate
-
-    # Verify module imports work
-    from src.agents.writer import writer_agent, WRITER_PROMPT
-    assert callable(writer_agent)
-    assert WRITER_PROMPT is not None
+    assert "final_report" in result
+    assert "completed_agents" in result
+    assert "writer" in result["completed_agents"]

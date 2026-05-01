@@ -11,14 +11,29 @@ This separation makes each agent independently testable and replaceable.
 """
 
 import logging
+import os
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ..state import AgentState
 from ..tools.web_search import get_web_search_tool
 
 logger = logging.getLogger(__name__)
+
+
+def _get_llm(temperature: float = 0):
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model="google/gemini-2.0-flash-001",
+            openai_api_key=openrouter_key,
+            openai_api_base="https://openrouter.ai/api/v1",
+            temperature=temperature,
+        )
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=temperature)
+
 
 RESEARCHER_SYSTEM_PROMPT = """You are a research specialist. Your job is to search the web for accurate, relevant information to answer the user's question.
 
@@ -40,7 +55,7 @@ def researcher_agent(state: AgentState) -> dict:
     """
     logger.info("Researcher agent: starting web search")
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+    llm = _get_llm(temperature=0)
     search_tool = get_web_search_tool(max_results=5)
 
     # Give the LLM access to the tool

@@ -12,15 +12,30 @@ This separation of concerns mirrors real research workflows:
 """
 
 import logging
+import os
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ..state import AgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _get_llm(temperature: float = 0):
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model="google/gemini-2.0-flash-001",
+            openai_api_key=openrouter_key,
+            openai_api_base="https://openrouter.ai/api/v1",
+            temperature=temperature,
+        )
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=temperature)
+
 
 WRITER_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are a professional research writer. Synthesize the provided research into a clear, well-structured report.
@@ -53,7 +68,7 @@ def writer_agent(state: AgentState) -> dict:
     """
     logger.info("Writer agent: synthesizing report")
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.3)
+    llm = _get_llm(temperature=0.3)
     chain = WRITER_PROMPT | llm | StrOutputParser()
 
     report = chain.invoke({
