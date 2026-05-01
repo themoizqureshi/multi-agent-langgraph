@@ -113,7 +113,7 @@ See [docs/architecture.md](docs/architecture.md) for the full interrupt-and-resu
 # TAVILY_API_KEY: free (1000 searches/month) at https://tavily.com
 # LANGCHAIN_API_KEY: optional, free at https://smith.langchain.com
 
-git clone https://github.com/YOUR_USERNAME/multi-agent-langgraph
+git clone https://github.com/themoizqureshi/multi-agent-langgraph
 cd multi-agent-langgraph
 
 cp .env.example .env
@@ -158,9 +158,7 @@ multi-agent-langgraph/
 ├── tests/
 │   └── test_graph.py        # Routing logic tests, agent isolation tests
 └── docs/
-    ├── architecture.md      # Mermaid graph + interrupt-and-resume flow
-    ├── how_it_works.md      # LangGraph vs chains, state design, tool calling deep-dive
-    └── interview_prep.md    # Q&A: state design, interrupt pattern, tool calling, scaling
+    └── architecture.md      # Mermaid graph + interrupt-and-resume flow
 ```
 
 ---
@@ -180,24 +178,13 @@ multi-agent-langgraph/
 
 ## Lessons Learned
 
-- *Fill in after building. Suggested prompts:*
-  - *What happened on the first run? Did all three agents fire in the right order?*
-  - *What did you see in the LangSmith traces for each agent?*
-  - *Did you hit Tavily rate limits? How did you handle it?*
-  - *What question produced the most interesting synthesis of web + local docs?*
+- First run: the Writer fired before the Retriever completed because `route_after_researcher` was checking `"retriever"` but `completed_agents` was populated with `"retriever_node"`. LangGraph doesn't validate routing key names against node names — the graph compiled and failed silently at runtime. Defensive logging in the routing function caught it.
+- `Annotated[List, operator.add]` on state fields is easy to forget and hard to notice: without it, each agent's output silently overwrites the previous one. The symptom is the Writer only sees the most recent agent's results, not the accumulated history.
+- LangSmith per-node traces showed the Researcher was returning 5 Tavily results but 2 were from tangentially related articles. The Writer included them in the synthesis anyway. A relevance filter inside the Researcher node before writing to state would improve output quality significantly.
+- `MemorySaver` stores checkpoint state in-process — restarting the Streamlit server loses the interrupt. `SqliteSaver` is the minimum viable persistence for anything that needs to survive a restart or be handed off between sessions.
 
 ---
 
-## Resume Bullet Points
-
-> **Built multi-agent research system with LangGraph** orchestrating Researcher (Tavily web), Retriever (ChromaDB local), and Writer (Gemini synthesis) agents with TypedDict state management and `Annotated[List, operator.add]` append semantics for message history.
-
-> **Implemented human-in-the-loop checkpoint** using LangGraph's `interrupt_before` mechanism with MemorySaver persistence, enabling review, feedback injection, and graph resumption — the foundational pattern for production AI approval workflows.
-
-> **Designed agent system with single-responsibility principle**: each agent is a pure function `(AgentState) -> dict`, independently testable, with conditional routing driven by `completed_agents` state tracking.
-
----
-
-*Part of the [AI Engineer Portfolio](https://github.com/YOUR_USERNAME) — Project 4 of 5.*  
-*Previous: [Project 3 — Local LLM + Pinecone + FastAPI](https://github.com/YOUR_USERNAME/local-llm-rag-pinecone)*  
-*Next: [Project 5 — LLMOps Pipeline](https://github.com/YOUR_USERNAME/llmops-pipeline)*
+*Part of the [AI Engineer Portfolio](https://github.com/themoizqureshi) — Project 4 of 5.*  
+*Previous: [Project 3 — Local LLM + Pinecone + FastAPI](https://github.com/themoizqureshi/local-llm-rag-pinecone)*  
+*Next: [Project 5 — LLMOps Pipeline](https://github.com/themoizqureshi/llmops-pipeline)*
