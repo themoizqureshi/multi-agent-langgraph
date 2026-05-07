@@ -49,16 +49,17 @@ def test_route_handles_empty_completed_agents():
 
 # ── Human review node tests ───────────────────────────────────────────────────
 
-def test_human_review_returns_empty_dict():
+def test_human_review_returns_human_feedback():
     state = make_state()
     result = human_review_node(state)
-    assert result == {}
+    assert "human_feedback" in result
+    assert result["human_feedback"] == ""
 
 
-def test_human_review_handles_feedback():
+def test_human_review_passes_feedback_through():
     state = make_state(human_feedback="Please add more detail.")
     result = human_review_node(state)
-    assert result == {}
+    assert result["human_feedback"] == "Please add more detail."
 
 
 # ── Researcher agent tests ────────────────────────────────────────────────────

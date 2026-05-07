@@ -8,7 +8,7 @@ graph TD
     R --> COND{route_after_researcher}
     COND -->|retriever not done| RET[📚 Retriever\nChromaDB local search]
     COND -->|retriever done| W
-    RET --> W[✍️ Writer\nSynthesize report]
+    RET --> W[✍️ Writer\nGemini via OpenRouter synthesis]
     W --> HR[👤 Human Review\nCheckpoint — PAUSES here]
     HR --> END([Final Report])
 

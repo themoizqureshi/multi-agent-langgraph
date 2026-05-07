@@ -65,7 +65,8 @@ def human_review_node(state: AgentState) -> dict:
         logger.info(f"Human review: feedback received — '{feedback[:100]}'")
     else:
         logger.info("Human review: approved with no changes")
-    return {}  # No state changes — this node is a checkpoint, not a processor
+    # LangGraph 0.2.52+ requires at least one state field in the returned dict
+    return {"human_feedback": feedback or ""}
 
 
 def build_research_graph():
