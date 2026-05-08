@@ -208,6 +208,12 @@ multi-agent-langgraph/
 
 ---
 
+## Testing Screenshot
+
+![Multi-Agent LangGraph Demo](screenshots/screenshot1.png)
+
+---
+
 *Part of the [AI Engineer Portfolio](https://github.com/themoizqureshi) — Project 4 of 5.*  
 *Previous: [Project 3 — Local LLM + Pinecone + FastAPI](https://github.com/themoizqureshi/local-llm-rag-pinecone)*  
 *Next: [Project 5 — LLMOps Pipeline](https://github.com/themoizqureshi/llmops-pipeline)*
