@@ -137,6 +137,11 @@ def run_until_interrupt(question: str, thread_id: str = "default") -> tuple:
         "doc_search_results": None,
         "final_report": None,
         "human_feedback": None,
+        # Token accumulators start at 0; operator.add in AgentState adds each agent's usage
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        # Researcher sets this to True on failure so Writer adjusts report
+        "search_failed": False,
     }
 
     logger.info(f"Starting research graph for: '{question[:60]}'")

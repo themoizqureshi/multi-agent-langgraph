@@ -19,6 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from ..state import AgentState
+from ..cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ Guidelines:
 - Organize findings into logical sections with headers
 - Cite sources by referencing [Web] or [Local Doc] for each claim
 - Note any contradictions between web and local sources
+- If web results begin with [WEB_SEARCH_FAILED] or [WEB_SEARCH_UNAVAILABLE], note that the report is based on local documents only and omit any [Web] citations
 - End with a brief summary and confidence level
 - Use markdown formatting for readability"""),
     ("human", """Question: {question}
@@ -64,23 +66,34 @@ def writer_agent(state: AgentState) -> dict:
     Writer agent node: synthesizes all research into a final report.
 
     Combines web_search_results and doc_search_results from state.
-    Falls back gracefully if either source is missing.
+    Handles search_failed=True gracefully by adjusting report tone.
+    Captures token usage and returns it for LangGraph state accumulation.
     """
     logger.info("Writer agent: synthesizing report")
 
+    tracker = CostTracker()
     llm = _get_llm(temperature=0.3)
     chain = WRITER_PROMPT | llm | StrOutputParser()
 
-    report = chain.invoke({
-        "question": state["question"],
-        "web_results": state.get("web_search_results") or "No web results available.",
-        "doc_results": state.get("doc_search_results") or "No local documents available.",
-    })
+    report = chain.invoke(
+        {
+            "question": state["question"],
+            "web_results": state.get("web_search_results") or "No web results available.",
+            "doc_results": state.get("doc_search_results") or "No local documents available.",
+        },
+        config={"callbacks": [tracker]},
+    )
 
-    logger.info(f"Writer agent: generated {len(report)}-char report")
+    logger.info(
+        "Writer agent: generated %d-char report | %s",
+        len(report),
+        tracker.summary.display(),
+    )
 
     return {
         "final_report": report,
         "completed_agents": ["writer"],
+        "total_input_tokens": tracker.summary.input_tokens,
+        "total_output_tokens": tracker.summary.output_tokens,
         "messages": [AIMessage(content=f"[Writer] Report complete ({len(report)} chars).")],
     }

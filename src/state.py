@@ -22,6 +22,10 @@ class AgentState(TypedDict):
 
     Fields use Optional[str] (not str) so the initial state can omit them
     without TypedDict raising a validation error.
+
+    Token fields use Annotated[int, operator.add] so each agent's usage
+    accumulates into a running total across the full graph run — LangGraph
+    calls operator.add(current, new) when merging state updates.
     """
 
     # The original user question — never mutated after initialization
@@ -42,3 +46,11 @@ class AgentState(TypedDict):
 
     # Human feedback injected at the review checkpoint
     human_feedback: Optional[str]
+
+    # Per-run token usage — accumulated across all agents via operator.add
+    total_input_tokens: Annotated[int, operator.add]
+    total_output_tokens: Annotated[int, operator.add]
+
+    # Set to True by researcher when web search fails after all retries;
+    # writer uses this to adjust report tone ("based on local docs only")
+    search_failed: bool

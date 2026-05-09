@@ -9,6 +9,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from src.graph import run_until_interrupt, resume_after_review
+from src.agents.researcher import _circuit
 
 load_dotenv()
 
@@ -34,6 +35,10 @@ if "final_report" not in st.session_state:
     st.session_state.final_report = None
 if "stage" not in st.session_state:
     st.session_state.stage = "input"  # input → researching → review → complete
+if "run_cost" not in st.session_state:
+    st.session_state.run_cost = None  # populated after research completes
+if "search_failed" not in st.session_state:
+    st.session_state.search_failed = False
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -52,7 +57,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Agent Pipeline**")
     agents = [
-        ("🔍 Researcher", "Web search via Tavily"),
+        ("🔍 Researcher", "Web search via Tavily (retry + circuit breaker)"),
         ("📚 Retriever", "Local docs via ChromaDB"),
         ("✍️ Writer", "Synthesize report"),
         ("👤 Human Review", "You approve or give feedback"),
@@ -60,12 +65,33 @@ with st.sidebar:
     for name, desc in agents:
         st.markdown(f"**{name}** — {desc}")
 
+    st.markdown("---")
+    # Circuit breaker status
+    if _circuit["open"]:
+        st.error(f"⚡ Circuit breaker OPEN — web search disabled after {_circuit['failures']} failures")
+    elif _circuit["failures"] > 0:
+        st.warning(f"⚠️ Web search: {_circuit['failures']}/{3} failures (circuit closes at 3)")
+    else:
+        st.success("✅ Web search: healthy")
+
+    # Cost summary for the last run
+    if st.session_state.run_cost:
+        cost = st.session_state.run_cost
+        st.markdown("---")
+        st.markdown("**Last run cost**")
+        st.caption(
+            f"Tokens: {cost['input']:,} in / {cost['output']:,} out  \n"
+            f"Est. cost: ${cost['usd']:.6f}"
+        )
+
     if st.button("🔄 Start New Research"):
         st.session_state.thread_id = str(uuid.uuid4())
         st.session_state.graph = None
         st.session_state.graph_config = None
         st.session_state.draft_report = None
         st.session_state.final_report = None
+        st.session_state.run_cost = None
+        st.session_state.search_failed = False
         st.session_state.stage = "input"
         st.rerun()
 
@@ -98,6 +124,17 @@ elif st.session_state.stage == "researching":
             )
             progress.progress(100, text="Research complete — awaiting your review")
 
+            # Capture cost and fallback status for sidebar display
+            pricing = 0.40 / 1_000_000  # output token price (Gemini Flash)
+            input_usd = state.get("total_input_tokens", 0) * (0.10 / 1_000_000)
+            output_usd = state.get("total_output_tokens", 0) * pricing
+            st.session_state.run_cost = {
+                "input": state.get("total_input_tokens", 0),
+                "output": state.get("total_output_tokens", 0),
+                "usd": round(input_usd + output_usd, 6),
+            }
+            st.session_state.search_failed = state.get("search_failed", False)
+
             st.session_state.graph = graph
             st.session_state.graph_config = config
             st.session_state.draft_report = state.get("final_report", "No report generated.")
@@ -112,6 +149,8 @@ elif st.session_state.stage == "researching":
 # ── Stage: Human Review ───────────────────────────────────────────────────────
 elif st.session_state.stage == "review":
     st.subheader("👤 Human Review Checkpoint")
+    if st.session_state.search_failed:
+        st.warning("Web search was unavailable — report is based on local documents only.")
     st.info("The agents have completed their research. Review the draft report below, then approve or provide feedback.")
 
     st.markdown("### Draft Report")

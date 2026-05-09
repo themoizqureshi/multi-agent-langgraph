@@ -25,6 +25,9 @@ def make_state(**overrides) -> AgentState:
         "final_report": None,
         "completed_agents": [],
         "human_feedback": None,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "search_failed": False,
     }
     base.update(overrides)
     return base
@@ -73,7 +76,8 @@ def test_researcher_agent_returns_correct_state_keys():
     mock_llm.bind_tools.return_value.invoke.return_value = mock_llm_response
 
     with patch("src.agents.researcher._get_llm", return_value=mock_llm), \
-         patch("src.agents.researcher.get_web_search_tool") as mock_tool_fn:
+         patch("src.agents.researcher.get_web_search_tool") as mock_tool_fn, \
+         patch("src.agents.researcher._circuit", {"failures": 0, "open": False}):
         mock_tool_fn.return_value = MagicMock()
 
         from src.agents.researcher import researcher_agent
@@ -83,6 +87,20 @@ def test_researcher_agent_returns_correct_state_keys():
     assert "web_search_results" in result
     assert "completed_agents" in result
     assert "messages" in result
+    assert "search_failed" in result
+    assert "total_input_tokens" in result
+    assert "total_output_tokens" in result
+    assert "researcher" in result["completed_agents"]
+
+
+def test_researcher_agent_falls_back_when_circuit_open():
+    with patch("src.agents.researcher._circuit", {"failures": 3, "open": True}):
+        from src.agents.researcher import researcher_agent
+        state = make_state(question="What is RAG?")
+        result = researcher_agent(state)
+
+    assert result["search_failed"] is True
+    assert "WEB_SEARCH_UNAVAILABLE" in result["web_search_results"]
     assert "researcher" in result["completed_agents"]
 
 
